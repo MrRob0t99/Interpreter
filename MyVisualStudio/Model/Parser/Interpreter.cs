@@ -1,95 +1,12 @@
-﻿using System;
+﻿using MyVisualStudio.Model.Parser;
+using MyVisualStudio.Model.Parser.Variables;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace MyParsr
 {
-    public class Function : Base
-    {
-        public string Name { get; set; }
-
-        public bool IsReturnValue { get; set; }
-
-        public bool Value { get; set; }
-
-        public string Parameters { get; set; }
-    }
-
-    public class Condition : Base
-    {
-
-        public bool IsHaveElse { get; set; }
-
-        public Else Else { get; set; }
-    }
-
-    public class Else : Base
-    {
-
-    }
-
-    public class While : Base
-    {
-
-    }
-
-    public class For : Base
-    {
-
-    }
-
-    public class Base
-    {
-        public Guid Id { get; set; }
-
-        public string Code { get; set; }
-
-        public string Conditon { get; set; }
-
-        public List<Condition> Codnditions { get; set; }
-
-        public List<While> While { get; set; }
-
-        public List<For> Fors { get; set; }
-
-        public List<Base> Bases { get; set; }
-    }
-
-    #region Variables
-
-    class Variable
-    {
-        public string Name { get; set; }
-    }
-
-    class VariableInt : Variable
-    {
-        public int Value { get; set; }
-    }
-
-    class VariableString : Variable
-    {
-        public string Value { get; set; }
-    }
-
-    class VariableDouble : Variable
-    {
-        public double Value { get; set; }
-    }
-
-    class VariableBoolean : Variable
-    {
-        public bool Value { get; set; }
-    }
-
-    class VariableArray : Variable
-    {
-        public List<Variable> Value { get; set; }
-    }
-
-    #endregion
-
     class Expresion
     {
         public string Expresions { get; set; }
@@ -105,13 +22,10 @@ namespace MyParsr
         {
             variableNameRegex = new Regex(@"\w*\s*?=");
             variableValueRegex = new Regex(@"\=\s*?(.*);");
-            // callFunctionRegex = new Regex(@"\s*\w*\(.*\);");
             callFunctionRegex = new Regex(@"[a-zA-Z]+\([^\)]*\)(\.[^\)]*\))?");
-            //  variableCreteRegex = new Regex(@"var+.*;");
             updateVariableRegex = new Regex(@"\s?\w*\s*=\s*.*\s*;");
             exprecionRegex = new Regex(@"=.*[\+|\-|\*]+.*;");
             parametersRegex = new Regex(@"\((.*?)\)");
-            //ifElseRegex = new Regex(@"(if\s*\([^()]*\)\p{Zs}*)\s*\{[.*\W*\S*]*}.{1}");
             ifRegex = new Regex(@"(if\s*\([^()]*\)\p{Zs}*)\s*{((?:\r?\n\p{Zs}+\p{L}.*)+?)+\s*?}");
             whileRegex = new Regex(@"(while\s*\([^()]*\)\p{Zs}*)\s*{((?:\r?\n?(\p{Zs}*)?\p{L}.*)+?)+\s*?}");
             elseRegex = new Regex(@"else\s*?{((?:\r?\n\p{Zs}+\p{L}.*)+?)+\s*?}");
@@ -130,7 +44,7 @@ namespace MyParsr
             returnRegex = new Regex(@"\s*return\s*.*;");
             retutnValue = new Regex(@"(?<=\breturn\s).*;");
             ifElseRegex = new Regex(@"\s*if\s*\(.*\)\s*\{?");
-            //subCall = new Regex(@"\w*\(\w*\)");
+            symbol = new string[] { "<=", ">=", "||", "&&", "!=", "==", ">", "<", "/", "*", "-", "+", "%" };
         }
 
         #endregion
@@ -141,11 +55,9 @@ namespace MyParsr
         private readonly Regex variableNameRegex;
         private readonly Regex variableValueRegex;
         private readonly Regex callFunctionRegex;
-        //  private readonly Regex variableCreteRegex;
         private readonly Regex updateVariableRegex;
         private readonly Regex exprecionRegex;
         private readonly Regex parametersRegex;
-        //private readonly Regex ifElseRegex;
         private readonly Regex ifRegex;
         private readonly Regex whileRegex;
         private readonly Regex elseRegex;
@@ -154,7 +66,6 @@ namespace MyParsr
         private readonly Regex forCallRegex;
         private readonly Regex ifConditionRegex;
         private readonly Regex whileConditionRegex;
-        //private readonly Regex array;
         private readonly Regex functionNameRegex;
         private readonly Regex returnFunctionRegex;
         private readonly Regex param2;
@@ -165,10 +76,11 @@ namespace MyParsr
         private readonly Regex returnRegex;
         private readonly Regex retutnValue;
         private readonly Regex ifElseRegex;
-        //private readonly Regex subCall;
-        private string[] symbol = new string[] { "<=", ">=", "||", "&&", "!=", "==", ">", "<", "/", "*", "-", "+", "%" };
+        private string[] symbol;
 
         #endregion
+
+        #region Public Methods
 
         public void Run(string code)
         {
@@ -180,13 +92,14 @@ namespace MyParsr
             Console.ReadKey();
         }
 
+        #endregion
+
+        #region Private Methods for RunCode
+
         private dynamic CodeRun(string code, List<Variable> variables, Base function = null)
         {
             if (variables == null)
                 variables = new List<Variable>();
-            if (function == null)
-                function = new Base();
-            dynamic retu = null;
             var lines = Regex.Split(code, "\r\n").ToList();
 
             for (int i = 0; i < lines.Count; i++)
@@ -199,21 +112,7 @@ namespace MyParsr
                 if (callMatch.Count > 0 && !item.Contains("function"))
                 {
                     var call = callMatch[0].Value;
-                    var contentBracketsArray = call.Skip(call.IndexOf("(")).Take(call.LastIndexOf(")") - call.IndexOf("(") + 1);
-                    var contentBrackets = string.Concat(contentBracketsArray);
-                    while (callFunctionRegex.Matches(contentBrackets).Count > 0)
-                    {
-                        var subCheck = callFunctionRegex.Matches(contentBrackets)[0].Value;
-                        var restuir = RunFunk(subCheck, variables);
-                        var fN = GetFunctionName(subCheck);
-                        var f = GetFunctioByName(fN);
-                        if (f != null && f.IsReturnValue)
-                        {
-                            var repleseItem = item.Replace(subCheck, restuir.ToString());
-                            call = call.Replace(subCheck, restuir.ToString() + ")");
-                            contentBrackets = contentBrackets.Replace(contentBrackets, restuir.ToString() + ")");
-                        }
-                    }
+                    call = ReplaceSubCallFunction(call, variables);
                     var restur = RunFunk(call, variables);
                     var functionName = GetFunctionName(call);
                     var funk = GetFunctioByName(functionName);
@@ -230,24 +129,13 @@ namespace MyParsr
                 if (arrElemUpdate.Count > 0)
                 {
                     var match = arrElemUpdate[0].Value;
-                    var variable = CreateVariables(match, variables);
-                    var contentBracket = Regex.Match(match, @"\[([^)])\]").Groups[0].Value;
-                    contentBracket = contentBracket.Substring(1, contentBracket.Length - 2);
-                    int res = 0;
-                    int.TryParse(contentBracket, out res);
-                    if (variables != null && variables.Count > 0)
-                    {
-                        var fromVariabes = DoOperation(variables.FirstOrDefault(v => v.Name == contentBracket));
-                        int.TryParse(fromVariabes.ToString(), out res);
-                    }
-
+                    var r = UpdateArrItem(match, variables);
                     var name = arrByIndexRegex.Matches(match);
                     var names = name[0].Value;
                     names = names.Substring(0, names.Length - 1);
-                    var variabl = variables.FirstOrDefault(v => v.Name == names) as VariableArray;
-                    var value = variabl.Value;
-                    value.RemoveAt(res);
-                    value.Insert(res, variable);
+                    var value = (variables.FirstOrDefault(v => v.Name == names) as VariableArray).Value;
+                    value.RemoveAt(r.Item1);
+                    value.Insert(r.Item1, r.Item2);
                 }
 
                 var forMatch = forCallRegex.Matches(item);
@@ -258,23 +146,10 @@ namespace MyParsr
                     {
                         id = conditionId.Value.Substring(3);
                     }
-                    var fors = function.Bases.FirstOrDefault(c => c.Id.ToString() == id);
-                    if (fors == null)
-                        continue;
-                    var arr = fors.Conditon.Substring(1, fors.Conditon.Length - 2).Split(';').ToList();
-                    var variable = CreateVariables(arr[0] + ";", variables);
-                    variables.Add(variable);
-                    while (DoExpresion(arr[1], variables))
-                    {
-                        CodeRun(fors.Code, variables, function);
-                        var valueVariable = DoExpresion(arr[2], variables);
-                        var newVariable = GetVariableValue(valueVariable.ToString());
-                        newVariable.Name = variable.Name;
-                        int index = variables.IndexOf(variable);
-                        if (index != -1)
-                            variables[index] = newVariable;
-                        variable = newVariable;
-                    }
+                    var res = RunFor(id, variables, function);
+
+                    if (res != null)
+                        return res;
                     continue;
                 }
 
@@ -293,64 +168,20 @@ namespace MyParsr
                 var conditionMatch = conditionCallRegex.Matches(item);
                 if (conditionMatch.Count > 0)
                 {
-                    string id = string.Empty;
-                    foreach (Match conditionId in conditionMatch)
-                    {
-                        id = conditionId.Value.Substring(9);
-                    }
-                    var baseCondition = function.Bases.FirstOrDefault(c => c.Id.ToString() == id);
-
-                    if (baseCondition == null)
-                        continue;
-                    else
-                    {
-                        var condition = baseCondition as Condition;
-                        dynamic res = null;
-                        var isTrue = IsIfConditionTrue(condition.Conditon, variables, ifConditionRegex);
-                        if (isTrue)
-                        {
-                            res = CodeRun(condition.Code, variables, function);
-                            if (res != null)
-                            {
-                                retu = res;
-                                break;
-                            }
-                        }
-                        else if (condition.Else != null && condition.IsHaveElse == true)
-                        {
-                            res = CodeRun(condition.Else.Code, variables, function);
-
-                        }
-                        if (res != null)
-                        {
-                            retu = res;
-                            break;
-                        }
-                        continue;
-                    }
+                    var id = conditionMatch[0].Value.Substring(9);
+                    var res = RunIfElse(id, variables, function);
+                    if (res != null)
+                        return res;
+                    continue;
                 }
 
                 var whileMatch = whileCallRegex.Matches(item);
                 if (whileMatch.Count > 0)
                 {
-                    string id = string.Empty;
-                    foreach (Match conditionId in whileMatch)
-                    {
-                        id = conditionId.Value.Substring(5);
-                    }
-                    var whiles = function.Bases.FirstOrDefault(c => c.Id.ToString() == id);
-                    if (whiles == null)
-                        continue;
-                    var whileCode = whiles.Code;
-                    if (whileCode.Contains("{") && whileCode.Contains("}"))
-                    {
-                        var expresionArr = whileCode.Skip(whileCode.IndexOf("{") + 1).Take(whileCode.LastIndexOf("}") - whileCode.IndexOf("({") - 1);
-                        whileCode = string.Concat(expresionArr);
-                    }
-                    while (IsIfConditionTrue(whiles.Conditon, variables, whileConditionRegex))
-                    {
-                        CodeRun(whileCode, variables, function);
-                    }
+                    var id = whileMatch[0].Value.Substring(5);
+                    var res = RunWhile(id, variables, function);
+                    if (res != null)
+                        return res;
                     continue;
                 }
 
@@ -362,13 +193,12 @@ namespace MyParsr
                     value = value.Substring(0, value.Length - 1);
                     var res = DoExpresion(value, variables);
                     if (res != null)
-                    {
-                        retu = res;
-                        break;
-                    }
+                        return res;
+                    continue;
                 }
             }
-            return retu;
+
+            return null;
         }
 
         private dynamic RunFunk(string call, List<Variable> variables)
@@ -389,6 +219,114 @@ namespace MyParsr
             }
 
             return null;
+        }
+
+        private dynamic RunFor(string id, List<Variable> variables, Base bases)
+        {
+            var fors = bases.Bases.FirstOrDefault(c => c.Id.ToString() == id);
+            if (fors == null)
+                return null;
+            var arr = fors.Conditon.Substring(1, fors.Conditon.Length - 2).Split(';').ToList();
+            var variable = CreateVariables(arr[0] + ";", variables);
+            variables.Add(variable);
+            while (DoExpresion(arr[1], variables))
+            {
+                var res = CodeRun(fors.Code, variables, bases);
+                if (res != null)
+                    return res;
+                var valueVariable = DoExpresion(arr[2], variables);
+                var newVariable = GetVariableValue(valueVariable.ToString());
+                newVariable.Name = variable.Name;
+                int index = variables.IndexOf(variable);
+                if (index != -1)
+                    variables[index] = newVariable;
+                variable = newVariable;
+            }
+            return null;
+        }
+
+        private dynamic RunWhile(string id, List<Variable> variables, Base bases)
+        {
+            var whiles = bases.Bases.FirstOrDefault(c => c.Id.ToString() == id);
+            if (whiles == null)
+                return null;
+
+            var whileCode = whiles.Code;
+            if (whileCode.Contains("{") && whileCode.Contains("}"))
+            {
+                var expresionArr = whileCode.Skip(whileCode.IndexOf("{") + 1).Take(whileCode.LastIndexOf("}") - whileCode.IndexOf("({") - 1);
+                whileCode = string.Concat(expresionArr);
+            }
+            while (IsIfConditionTrue(whiles.Conditon, variables, whileConditionRegex))
+            {
+                var res = CodeRun(whileCode, variables, bases);
+                if (res != null)
+                    return res;
+            }
+            return null;
+        }
+
+        private dynamic RunIfElse(string id, List<Variable> variables, Base bases)
+        {
+            var baseCondition = bases.Bases.FirstOrDefault(c => c.Id.ToString() == id);
+
+            if (baseCondition == null)
+            {
+                return null;
+            }
+            else
+            {
+                var condition = baseCondition as Condition;
+                dynamic res = null;
+                var isTrue = IsIfConditionTrue(condition.Conditon, variables, ifConditionRegex);
+                if (isTrue)
+                    res = CodeRun(condition.Code, variables, bases);
+                else if (condition.IsHaveElse == true && condition.Else != null)
+                    res = CodeRun(condition.Else.Code, variables, bases);
+
+                if (res != null)
+                    return res;
+            }
+            return null;
+        }
+
+        private string ReplaceSubCallFunction(string call, List<Variable> variables)
+        {
+            var contentBracketsArray = call.Skip(call.IndexOf("(")).Take(call.LastIndexOf(")") - call.IndexOf("(") + 1);
+            var contentBrackets = string.Concat(contentBracketsArray);
+
+            while (callFunctionRegex.Matches(contentBrackets).Count > 0)
+            {
+                var subCheck = callFunctionRegex.Matches(contentBrackets)[0].Value;
+                var restuir = RunFunk(subCheck, variables);
+                var fN = GetFunctionName(subCheck);
+                var f = GetFunctioByName(fN);
+                if (f != null && f.IsReturnValue)
+                {
+                    call = call.Replace(subCheck, restuir.ToString() + ")");
+                    contentBrackets = contentBrackets.Replace(contentBrackets, restuir.ToString() + ")");
+                }
+            }
+
+            return call;
+        }
+
+        private (int, Variable) UpdateArrItem(string code, List<Variable> variables)
+        {
+            var variable = CreateVariables(code, variables);
+            var contentBracket = Regex.Match(code, @"\[([^)])\]").Groups[0].Value;
+            contentBracket = contentBracket.Substring(1, contentBracket.Length - 2);
+
+            int index = 0;
+            int.TryParse(contentBracket, out index);
+
+            if (variables != null && variables.Count > 0)
+            {
+                var fromVariabes = DoOperation(variables.FirstOrDefault(v => v.Name == contentBracket));
+                int.TryParse(fromVariabes.ToString(), out index);
+            }
+
+            return (index, variable);
         }
 
         private void Print(Variable variable)
@@ -612,58 +550,15 @@ namespace MyParsr
 
         }
 
-        private int GetIndex(string code, int startIndex = 0)
+        private bool IsIfConditionTrue(string code, List<Variable> variables, Regex regex)
         {
-            int open = 0;
-            for (int i = startIndex; i < code.Length; i++)
-            {
-                if (code[i] == '{')
-                    ++open;
-                if (code[i] == '}')
-                {
-                    --open;
-                    if (open == 0)
-                    {
-                        return i;
-                    }
-                }
-            }
-            return -1;
-        }
-
-        private List<Function> GetFunctionList(string code)
-        {
-            var functionsList = new List<Function>();
-
-            while (!string.IsNullOrWhiteSpace(code))
-            {
-                var function = new Function();
-                var param = string.Empty;
-
-                var index = GetIndex(code, code.IndexOf("function"));
-                var functionCode = code.Substring(code.IndexOf("function"), code.Length - (Math.Abs(index - code.Length)) + 1 - code.IndexOf("function"));
-                code = code.Substring(0, code.IndexOf("function")) + code.Substring(index + 1, Math.Abs(index - code.Length) - 1);
-                function.Code = functionCode;
-
-                var matchName = functionNameRegex.Matches(functionCode);
-                var matchParam = parametersRegex.Matches(functionCode);
-
-                if(matchName.Count>0)
-                function.Name = matchName[0].Value;
-
-                if (matchParam.Count > 0)
-                    param = matchParam[0].Value;
-
-                if (!string.IsNullOrWhiteSpace(param))
-                    function.Parameters = param.Substring(param.IndexOf("(") + 1, Math.Abs(param.IndexOf("(") - param.Length) - 2);
-
-                var matchReturn = returnRegex.Matches(functionCode);
-                function.IsReturnValue = matchReturn.Count > 0 ? true : false;
-                function = GetAttachments(function) as Function;
-                functionsList.Add(function);
-            }
-
-            return functionsList;
+            dynamic result = null;
+            string expresion = string.Empty;
+            expresion = code;
+            var expresionArr = expresion.Skip(expresion.IndexOf("(") + 1).Take(expresion.LastIndexOf(")") - expresion.IndexOf("(") - 1);
+            expresion = string.Concat(expresionArr);
+            result = DoExpresion(expresion, variables);
+            return result;
         }
 
         private dynamic GetValueVariable(Variable variable)
@@ -807,6 +702,64 @@ namespace MyParsr
             return res;
         }
 
+        #endregion
+
+        #region Private Methods for FormationCode 
+
+        private int GetIndex(string code, int startIndex = 0)
+        {
+            int open = 0;
+            for (int i = startIndex; i < code.Length; i++)
+            {
+                if (code[i] == '{')
+                    ++open;
+                if (code[i] == '}')
+                {
+                    --open;
+                    if (open == 0)
+                    {
+                        return i;
+                    }
+                }
+            }
+            return -1;
+        }
+
+        private List<Function> GetFunctionList(string code)
+        {
+            var functionsList = new List<Function>();
+
+            while (!string.IsNullOrWhiteSpace(code))
+            {
+                var function = new Function();
+                var param = string.Empty;
+
+                var index = GetIndex(code, code.IndexOf("function"));
+                var functionCode = code.Substring(code.IndexOf("function"), code.Length - (Math.Abs(index - code.Length)) + 1 - code.IndexOf("function"));
+                code = code.Substring(0, code.IndexOf("function")) + code.Substring(index + 1, Math.Abs(index - code.Length) - 1);
+                function.Code = functionCode;
+
+                var matchName = functionNameRegex.Matches(functionCode);
+                var matchParam = parametersRegex.Matches(functionCode);
+
+                if (matchName.Count > 0)
+                    function.Name = matchName[0].Value;
+
+                if (matchParam.Count > 0)
+                    param = matchParam[0].Value;
+
+                if (!string.IsNullOrWhiteSpace(param))
+                    function.Parameters = param.Substring(param.IndexOf("(") + 1, Math.Abs(param.IndexOf("(") - param.Length) - 2);
+
+                var matchReturn = returnRegex.Matches(functionCode);
+                function.IsReturnValue = matchReturn.Count > 0 ? true : false;
+                function = GetAttachments(function) as Function;
+                functionsList.Add(function);
+            }
+
+            return functionsList;
+        }
+
         private (string, List<Condition>) GetIfElse(string code)
         {
             var list = new List<Condition>();
@@ -922,17 +875,6 @@ namespace MyParsr
             return (code, forList);
         }
 
-        private bool IsIfConditionTrue(string code, List<Variable> variables, Regex regex)
-        {
-            dynamic result = null;
-            string expresion = string.Empty;
-            expresion = code;
-            var expresionArr = expresion.Skip(expresion.IndexOf("(") + 1).Take(expresion.LastIndexOf(")") - expresion.IndexOf("(") - 1);
-            expresion = string.Concat(expresionArr);
-            result = DoExpresion(expresion, variables);
-            return result;
-        }
-
         private Base GetAttachments(Base bas)
         {
             if (bas == null)
@@ -958,5 +900,7 @@ namespace MyParsr
             }
             return bas;
         }
+
+        #endregion
     }
 }
