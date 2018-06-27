@@ -83,12 +83,14 @@
     <Compile Include="Model\Parser\For.cs" />
     <Compile Include="Model\Parser\Function.cs" />
     <Compile Include="Model\Parser\Interpreter.cs" />
+    <Compile Include="Model\Parser\Struct.cs" />
     <Compile Include="Model\Parser\Variables\Variable.cs" />
     <Compile Include="Model\Parser\Variables\VariableArray.cs" />
     <Compile Include="Model\Parser\Variables\VariableBoolean.cs" />
     <Compile Include="Model\Parser\Variables\VariableDouble.cs" />
     <Compile Include="Model\Parser\Variables\VariableInt.cs" />
     <Compile Include="Model\Parser\Variables\VariableString.cs" />
+    <Compile Include="Model\Parser\Variables\VariableStruct.cs" />
     <Compile Include="Model\Parser\While.cs" />
     <Compile Include="News.cs" />
     <Compile Include="Presenter\View\Forms\MainView2.cs">

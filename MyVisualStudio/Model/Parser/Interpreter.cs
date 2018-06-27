@@ -44,6 +44,11 @@ namespace MyParsr
             returnRegex = new Regex(@"\s*return\s*.*;");
             retutnValue = new Regex(@"(?<=\breturn\s).*;");
             ifElseRegex = new Regex(@"\s*if\s*\(.*\)\s*\{?");
+            createInstanseStructRegex = new Regex(@"\s*\w*\s*=\s*new\s*\w*\(.*\);");
+            structNameRegex = new Regex(@"(?<=\bstruct\s)(\w+)");
+            createStructNameRegex = new Regex(@"(?<=\bnew\s)(\w+)");
+            callStructFunctionRegex = new Regex(@"\s*\w*\.\w*\(.*\);");
+
             symbol = new string[] { "<=", ">=", "||", "&&", "!=", "==", ">", "<", "/", "*", "-", "+", "%" };
         }
 
@@ -52,6 +57,7 @@ namespace MyParsr
         #region Fields
 
         private IEnumerable<Function> functionList;
+        private IEnumerable<Struct> structList;
         private readonly Regex variableNameRegex;
         private readonly Regex variableValueRegex;
         private readonly Regex callFunctionRegex;
@@ -76,6 +82,10 @@ namespace MyParsr
         private readonly Regex returnRegex;
         private readonly Regex retutnValue;
         private readonly Regex ifElseRegex;
+        private readonly Regex createInstanseStructRegex;
+        private readonly Regex structNameRegex;
+        private readonly Regex createStructNameRegex;
+        private readonly Regex callStructFunctionRegex;
         private string[] symbol;
 
         #endregion
@@ -85,6 +95,9 @@ namespace MyParsr
         public void Run(string code)
         {
             code = code.Replace("  ", " ");
+            var res = GetStructList(code);
+            code = res.Item1;
+            structList = res.Item2;
             functionList = GetFunctionList(code);
             var mainFunction = functionList.FirstOrDefault(f => f.Name == "Main");
             CodeRun(mainFunction.Code, null, mainFunction);
@@ -96,6 +109,7 @@ namespace MyParsr
 
         #region Private Methods for RunCode
 
+        //This method will be divided into parts
         private dynamic CodeRun(string code, List<Variable> variables, Base function = null)
         {
             if (variables == null)
@@ -107,6 +121,38 @@ namespace MyParsr
                 var item = lines[i];
                 if (string.IsNullOrWhiteSpace(item))
                     continue;
+
+                var callStructFunctionMatch = callStructFunctionRegex.Matches(item);
+                if (callStructFunctionMatch.Count > 0)
+                {
+                    var callFunction = callStructFunctionMatch[0].Value.Trim();
+                    var nameVariable = string.Concat(callFunction.Take(callFunction.IndexOf(".")));
+                    if (!variables.Any(v => v.Name == nameVariable))
+                        continue;
+                    var variable = (variables.FirstOrDefault(v => v.Name == nameVariable)) as VariableStruct;
+                    var methodName = string.Concat(callFunction.Skip(callFunction.IndexOf(".") + 1).Take(callFunction.LastIndexOf("(") - callFunction.IndexOf(".") - 1));
+                    var methodCall = string.Concat(callFunction.Skip(callFunction.IndexOf(".") + 1).Take(callFunction.LastIndexOf(")") - callFunction.IndexOf(".")));
+                    var struc = structList.FirstOrDefault(s => s.Name == variable.StructName);
+                    if (!struc.Functions.Any(f => f.Name == methodName))
+                        continue;
+                    var funk = struc.Functions.FirstOrDefault(f => f.Name == methodName);
+                    var result = RunFunk(methodCall, variables, funk);
+                }
+
+                var createInstanseStructMatch = createInstanseStructRegex.Matches(item);
+                if (createInstanseStructMatch.Count > 0)
+                {
+                    var createInstanseStruct = createInstanseStructMatch[0].Value;
+                    var nameStruct = createStructNameRegex.Matches(createInstanseStruct)[0].Value;
+                    if (!structList.Any(s => s.Name == nameStruct))
+                        continue;
+                    var structVariable = new VariableStruct();
+                    var variableNameMatch = variableNameRegex.Matches(code);
+                    structVariable.Name = string.Concat(variableNameMatch[0].Value.Substring(0, variableNameMatch[0].Value.Length - 1).Where(c => c != ' '));
+                    structVariable.StructName = nameStruct;
+                    variables.Add(structVariable);
+                    continue;
+                }
 
                 var callMatch = callFunctionRegex.Matches(item);
                 if (callMatch.Count > 0 && !item.Contains("function"))
@@ -201,20 +247,23 @@ namespace MyParsr
             return null;
         }
 
-        private dynamic RunFunk(string call, List<Variable> variables)
+        private dynamic RunFunk(string call, List<Variable> variables, Function function = null)
         {
             var functionName = GetFunctionName(call);
-            var funk = GetFunctioByName(functionName);
-            var functionParams = GetParametersForCallFunction(call, variables, funk);
+            if (function == null)
+                function = GetFunctioByName(functionName);
+
+            var functionParams = GetParametersForCallFunction(call, variables, function);
+
             if (functionName == "Print")
             {
                 Print(functionParams.FirstOrDefault());
             }
 
-            else if (IsExistFunction(functionName))
+            else if (IsExistFunction(functionName)|| function!=null)
             {
-                var res = CodeRun(funk.Code, functionParams, funk);
-                if (funk.IsReturnValue)
+                var res = CodeRun(function.Code, functionParams, function);
+                if (function.IsReturnValue)
                     return res;
             }
 
@@ -234,8 +283,9 @@ namespace MyParsr
                 var res = CodeRun(fors.Code, variables, bases);
                 if (res != null)
                     return res;
+
                 var valueVariable = DoExpresion(arr[2], variables);
-                var newVariable = GetVariableValue(valueVariable.ToString());
+                var newVariable = GetVariable(valueVariable.ToString());
                 newVariable.Name = variable.Name;
                 int index = variables.IndexOf(variable);
                 if (index != -1)
@@ -250,19 +300,13 @@ namespace MyParsr
             var whiles = bases.Bases.FirstOrDefault(c => c.Id.ToString() == id);
             if (whiles == null)
                 return null;
-
-            var whileCode = whiles.Code;
-            if (whileCode.Contains("{") && whileCode.Contains("}"))
-            {
-                var expresionArr = whileCode.Skip(whileCode.IndexOf("{") + 1).Take(whileCode.LastIndexOf("}") - whileCode.IndexOf("({") - 1);
-                whileCode = string.Concat(expresionArr);
-            }
             while (IsIfConditionTrue(whiles.Conditon, variables, whileConditionRegex))
             {
-                var res = CodeRun(whileCode, variables, bases);
+                var res = CodeRun(whiles.Code, variables, bases);
                 if (res != null)
                     return res;
             }
+
             return null;
         }
 
@@ -377,9 +421,19 @@ namespace MyParsr
             {
                 var value = DoOperation(item);
                 Variable variable = null;
-                if (!(item is VariableArray))
+                if (item is VariableStruct)
                 {
-                    variable = GetVariableValue(value.ToString());
+                    var struc = item as VariableStruct;
+                    var newStruct = new VariableStruct();
+                    newStruct.Name = struc.Name;
+                    newStruct.StructName = struc.StructName;
+                    if (struc.Value != null)
+                        newStruct.Value = struc.Value;
+                    variable = newStruct;
+                }
+                else if (!(item is VariableArray))
+                {
+                    variable = GetVariable(value.ToString());
                 }
                 else
                 {
@@ -409,11 +463,11 @@ namespace MyParsr
             if (IsOperation(variabeValue))
             {
                 var operatingResult = DoExpresion(variabeValue, variables);
-                variable = GetVariableValue(operatingResult.ToString(), variables);
+                variable = GetVariable(operatingResult.ToString(), variables);
             }
             else
             {
-                variable = (GetVariableValue(variabeValue, variables));
+                variable = (GetVariable(variabeValue, variables));
             }
             return variable;
         }
@@ -481,7 +535,7 @@ namespace MyParsr
             return variable;
         }
 
-        private Variable GetVariableValue(string value, List<Variable> variables = null)
+        private Variable GetVariable(string value, List<Variable> variables = null)
         {
             bool boolean;
             double doubl;
@@ -495,17 +549,20 @@ namespace MyParsr
                 variable = new VariableBoolean() { Value = boolean };
                 return variable;
             }
+
             var strWithoutDash = string.Concat(value.Where(c => c != '_'));
             if (double.TryParse(strWithoutDash, out doubl))
             {
                 variable = new VariableDouble() { Value = doubl };
                 return variable;
             }
+
             if (int.TryParse(strWithoutDash, out int32))
             {
                 variable = new VariableInt() { Value = int32 };
                 return variable;
             }
+
             if (value.Contains("[") && value.Contains("]") && !IsOperation(value))
             {
                 var contentBracket = Regex.Match(value, @"\[([^)]*)\]").Groups[0].Value;
@@ -542,6 +599,7 @@ namespace MyParsr
                 variable = new VariableArray() { Value = variableList };
                 return variable;
             }
+
             else
             {
                 variable = new VariableString() { Value = value };
@@ -643,8 +701,11 @@ namespace MyParsr
             }
 
             var operands = code.Split(symbol, StringSplitOptions.RemoveEmptyEntries).ToList();
-            var actionList = new List<string>();
 
+            if (operands.Count == 1)
+                return DoOperation(GetVariable(operands[0]));
+
+            var actionList = new List<string>();
             for (int i = 0; i < code.Length; i++)
             {
                 if (code.Length > i + 1 && symbol.Any(ex => ex == (Char.ToString(code[i]) + Char.ToString(code[i + 1]))))
@@ -665,11 +726,6 @@ namespace MyParsr
                     operands[i] = DoOperation(variables.FirstOrDefault(v => v.Name == operands[i])).ToString();
             }
 
-            if (operands.Count == 1)
-            {
-                return DoOperation(GetVariableValue(operands[0]));
-            }
-
             var count = 0;
             dynamic res = null;
 
@@ -677,8 +733,8 @@ namespace MyParsr
             {
                 if (priorityAction.IndexOf(actionList[i]) != -1)
                 {
-                    var v1 = GetVariableValue(operands[i]);
-                    var v2 = GetVariableValue(operands[i + 1]);
+                    var v1 = GetVariable(operands[i]);
+                    var v2 = GetVariable(operands[i + 1]);
                     res = DoOperation(v1, v2, actionList[i].ToString());
                     operands.Remove(operands[i + 1]);
                     operands[i] = res.ToString();
@@ -690,8 +746,8 @@ namespace MyParsr
             {
                 if (1 <= operands.Count())
                 {
-                    var v1 = GetVariableValue(operands[0], variables);
-                    var v2 = GetVariableValue(operands[1], variables);
+                    var v1 = GetVariable(operands[0], variables);
+                    var v2 = GetVariable(operands[1], variables);
 
                     res = DoOperation(v1, v2, actionList[count].ToString());
                     operands.RemoveAt(1);
@@ -728,8 +784,8 @@ namespace MyParsr
         private List<Function> GetFunctionList(string code)
         {
             var functionsList = new List<Function>();
-
-            while (!string.IsNullOrWhiteSpace(code))
+            var regex = new Regex(@"\s*function\s*\w*\(");
+            while (regex.Matches(code).Count > 0)
             {
                 var function = new Function();
                 var param = string.Empty;
@@ -849,7 +905,8 @@ namespace MyParsr
                 var whileC = new While();
                 whileC.Conditon = whileConditionRegex.Matches(code)[0].Value;
                 var id = Guid.NewGuid();
-                whileC.Code = item.Value;
+                var endIndex = GetIndex(item.Value);
+                whileC.Code = item.Value.Substring(item.Value.IndexOf("{"), Math.Min(item.Value.Length, endIndex) - item.Value.IndexOf("{") + 1);
                 whileC.Id = id;
                 code = code.Replace(item.Value, "while" + id.ToString());
                 whileList.Add(whileC);
@@ -863,14 +920,14 @@ namespace MyParsr
             var forList = new List<For>();
             foreach (Match item in matchCollection)
             {
-                var whileC = new For();
-                whileC.Conditon = forConditionRegex.Matches(code)[0].Value;
+                var fors = new For();
+                fors.Conditon = forConditionRegex.Matches(code)[0].Value;
                 var id = Guid.NewGuid();
                 var endIndex = GetIndex(item.Value);
-                whileC.Code = item.Value.Substring(item.Value.IndexOf("{"), Math.Min(item.Value.Length, endIndex) - item.Value.IndexOf("{") + 1);
-                whileC.Id = id;
+                fors.Code = item.Value.Substring(item.Value.IndexOf("{"), Math.Min(item.Value.Length, endIndex) - item.Value.IndexOf("{") + 1);
+                fors.Id = id;
                 code = code.Replace(item.Value, "\r\nfor" + id.ToString());
-                forList.Add(whileC);
+                forList.Add(fors);
             }
             return (code, forList);
         }
@@ -899,6 +956,27 @@ namespace MyParsr
                 bas.Bases.AddRange(subBase.Bases);
             }
             return bas;
+        }
+
+        private (string, List<Struct>) GetStructList(string code)
+        {
+            var structList = new List<Struct>();
+            var regex = new Regex(@"\s*struct\s*\w*\s*{");
+
+            while (regex.Matches(code).Count > 0)
+            {
+                var struc = new Struct();
+                var index = GetIndex(code, code.IndexOf("struct"));
+                var structCode = code.Substring(code.IndexOf("struct"), code.Length - (Math.Abs(index - code.Length)) + 1 - code.IndexOf("struct"));
+                struc.Code = structCode;
+                var matchName = structNameRegex.Matches(structCode);
+                struc.Name = matchName[0].Value;
+                struc.Functions = GetFunctionList(structCode);
+                code = code.Replace(structCode, "\r\n");
+                structList.Add(struc);
+            }
+
+            return (code, structList);
         }
 
         #endregion
