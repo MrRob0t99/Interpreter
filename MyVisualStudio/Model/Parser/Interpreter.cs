@@ -1,108 +1,72 @@
-﻿using MyVisualStudio.Model.Parser;
+﻿using Microsoft.CSharp;
+using MyVisualStudio.Model.Parser;
 using MyVisualStudio.Model.Parser.Variables;
 using System;
+using System.CodeDom.Compiler;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 
 namespace MyParsr
 {
-    class Expresion
+    public partial class Interpreter
     {
-        public string Expresions { get; set; }
-
-        public dynamic Result { get; set; }
-    }
-
-    public class Interpreter
-    {
-        #region Init
-
-        public Interpreter()
-        {
-            variableNameRegex = new Regex(@"\w*\s*?=");
-            variableValueRegex = new Regex(@"\=\s*?(.*);");
-            callFunctionRegex = new Regex(@"[a-zA-Z]+\([^\)]*\)(\.[^\)]*\))?");
-            updateVariableRegex = new Regex(@"\s?\w*\s*=\s*.*\s*;");
-            exprecionRegex = new Regex(@"=.*[\+|\-|\*]+.*;");
-            parametersRegex = new Regex(@"\((.*?)\)");
-            ifRegex = new Regex(@"(if\s*\([^()]*\)\p{Zs}*)\s*{((?:\r?\n\p{Zs}+\p{L}.*)+?)+\s*?}");
-            whileRegex = new Regex(@"(while\s*\([^()]*\)\p{Zs}*)\s*{((?:\r?\n?(\p{Zs}*)?\p{L}.*)+?)+\s*?}");
-            elseRegex = new Regex(@"else\s*?{((?:\r?\n\p{Zs}+\p{L}.*)+?)+\s*?}");
-            conditionCallRegex = new Regex("condition([0-9A-Fa-f]{8}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{12})$");
-            whileCallRegex = new Regex("while([0-9A-Fa-f]{8}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{12})$");
-            forCallRegex = new Regex("for([0-9A-Fa-f]{8}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{12})$");
-            ifConditionRegex = new Regex(@"(?<=if).*\)");
-            whileConditionRegex = new Regex(@"(?<=while).*\)");
-            forConditionRegex = new Regex(@"(?<=for).*\)");
-            functionNameRegex = new Regex(@"(?<=\bfunction\s)(\w+)");
-            returnFunctionRegex = new Regex(@"\W*(return)\W*");
-            param2 = new Regex(@"function+\s*\w+\((.*?)\)");
-            arrByIndexRegex = new Regex(@"\w*\[");
-            updateItemArrRegex = new Regex(@"\w*\[\w*\]\s*=.*;");
-            forRegex = new Regex(@"\s*(for\s*\([^()]*\)\p{Zs}*)\s*{((?:\s*\r?\n?(\p{Zs}*)?\p{L}.*)+?)+\s*?}");
-            returnRegex = new Regex(@"\s*return\s*.*;");
-            retutnValue = new Regex(@"(?<=\breturn\s).*;");
-            ifElseRegex = new Regex(@"\s*if\s*\(.*\)\s*\{?");
-            createInstanseStructRegex = new Regex(@"\s*\w*\s*=\s*new\s*\w*\(.*\);");
-            structNameRegex = new Regex(@"(?<=\bstruct\s)(\w+)");
-            createStructNameRegex = new Regex(@"(?<=\bnew\s)(\w+)");
-            callStructFunctionRegex = new Regex(@"\s*\w*\.\w*\(.*\);");
-
-            symbol = new string[] { "<=", ">=", "||", "&&", "!=", "==", ">", "<", "/", "*", "-", "+", "%" };
-        }
-
-        #endregion
-
-        #region Fields
-
-        private IEnumerable<Function> functionList;
-        private IEnumerable<Struct> structList;
-        private readonly Regex variableNameRegex;
-        private readonly Regex variableValueRegex;
-        private readonly Regex callFunctionRegex;
-        private readonly Regex updateVariableRegex;
-        private readonly Regex exprecionRegex;
-        private readonly Regex parametersRegex;
-        private readonly Regex ifRegex;
-        private readonly Regex whileRegex;
-        private readonly Regex elseRegex;
-        private readonly Regex conditionCallRegex;
-        private readonly Regex whileCallRegex;
-        private readonly Regex forCallRegex;
-        private readonly Regex ifConditionRegex;
-        private readonly Regex whileConditionRegex;
-        private readonly Regex functionNameRegex;
-        private readonly Regex returnFunctionRegex;
-        private readonly Regex param2;
-        private readonly Regex arrByIndexRegex;
-        private readonly Regex updateItemArrRegex;
-        private readonly Regex forRegex;
-        private readonly Regex forConditionRegex;
-        private readonly Regex returnRegex;
-        private readonly Regex retutnValue;
-        private readonly Regex ifElseRegex;
-        private readonly Regex createInstanseStructRegex;
-        private readonly Regex structNameRegex;
-        private readonly Regex createStructNameRegex;
-        private readonly Regex callStructFunctionRegex;
-        private string[] symbol;
-
-        #endregion
-
         #region Public Methods
 
-        public void Run(string code)
+        public string Code;
+
+        public dynamic Run(string code)
         {
-            code = code.Replace("  ", " ");
-            var res = GetStructList(code);
-            code = res.Item1;
-            structList = res.Item2;
-            functionList = GetFunctionList(code);
             var mainFunction = functionList.FirstOrDefault(f => f.Name == "Main");
-            CodeRun(mainFunction.Code, null, mainFunction);
+            var result = CodeRun(mainFunction.Code, null, mainFunction);
             Console.WriteLine("END");
-            Console.ReadKey();
+            return result;
+        }
+
+        public string LoadFile(string path)
+        {
+            using (var streamReader = new StreamReader(string.Concat(path)))
+            {
+                Code = streamReader.ReadToEnd();
+            }
+            Code = Code.Replace("  ", " ");
+            var res = GetStructList(Code);
+            Code = res.Item1;
+            structList = res.Item2;
+            functionList = GetFunctionList(Code).Item2;
+            return Code;
+        }
+
+        public dynamic RunMain()
+        {
+            return Run(Code);
+        }
+
+        public dynamic RunFunction(string call)
+        {
+            return RunFunk(call, null);
+        }
+
+        public dynamic RunFunction(string nameFunction, params dynamic[] param)
+        {
+            if (!IsExistFunction(nameFunction))
+            {
+                Console.WriteLine("Function not Found");
+                return null;
+            }
+            var func = GetFunctioByName(nameFunction);
+            nameFunction += "(";
+            var functionNameParamArr = func.Parameters.Split(',').ToList();
+            for (int i = 0; i < functionNameParamArr.Count; i++)
+            {
+                nameFunction += param[i].ToString();
+                if (i + 1 < functionNameParamArr.Count)
+                    nameFunction += ",";
+            }
+            nameFunction += ")";
+            return RunFunk(nameFunction, null);
         }
 
         #endregion
@@ -110,7 +74,7 @@ namespace MyParsr
         #region Private Methods for RunCode
 
         //This method will be divided into parts
-        private dynamic CodeRun(string code, List<Variable> variables, Base function = null)
+        private dynamic CodeRun(string code, List<Variable> variables, Base distrib = null)
         {
             if (variables == null)
                 variables = new List<Variable>();
@@ -121,6 +85,37 @@ namespace MyParsr
                 var item = lines[i];
                 if (string.IsNullOrWhiteSpace(item))
                     continue;
+                var setFieldStructMatch = setStructFieldRegex.Matches(item);
+                if (setFieldStructMatch.Count > 0)
+                {
+                    var regex = new Regex(@"\.\w*");
+                    var setFieldStruct = setFieldStructMatch[0].Value.Trim();
+                    var nameVariable = string.Concat(setFieldStruct.Take(setFieldStruct.IndexOf(".")));
+                    if (!variables.Any(v => v.Name == nameVariable))
+                        continue;
+
+                    var variable = variables.FirstOrDefault(v => v.Name == nameVariable);
+                    if (!(variable is VariableStruct))
+                        continue;
+
+                    var nameFiled = regex.Matches(setFieldStruct)[0].Value.Substring(1);
+                    var struc = variable as VariableStruct;
+                    if (!struc.Value.Any(s => s.Name == nameFiled))
+                        continue;
+
+                    var fieldValue = variableValueRegex.Matches(setFieldStruct)[0].Value;
+                    fieldValue = fieldValue.Substring(1, fieldValue.Length - 2).Trim();
+                    var newFieldVariable = GetVariableWithValue(fieldValue, variables);
+                    var oldVariable = struc.Value.FirstOrDefault(s => s.Name == nameFiled);
+                    if (GetTypeVariable(oldVariable) != GetTypeVariable(newFieldVariable))
+                        continue;
+
+                    newFieldVariable.Name = oldVariable.Name;
+                    int index = struc.Value.IndexOf(oldVariable);
+                    if (index != -1)
+                        struc.Value[index] = newFieldVariable;
+                }
+
 
                 var callStructFunctionMatch = callStructFunctionRegex.Matches(item);
                 if (callStructFunctionMatch.Count > 0)
@@ -146,10 +141,12 @@ namespace MyParsr
                     var nameStruct = createStructNameRegex.Matches(createInstanseStruct)[0].Value;
                     if (!structList.Any(s => s.Name == nameStruct))
                         continue;
+                    var struc = structList.FirstOrDefault(s => s.Name == nameStruct);
                     var structVariable = new VariableStruct();
                     var variableNameMatch = variableNameRegex.Matches(code);
                     structVariable.Name = string.Concat(variableNameMatch[0].Value.Substring(0, variableNameMatch[0].Value.Length - 1).Where(c => c != ' '));
                     structVariable.StructName = nameStruct;
+                    structVariable.Value = struc.Fields;
                     variables.Add(structVariable);
                     continue;
                 }
@@ -162,7 +159,7 @@ namespace MyParsr
                     var restur = RunFunk(call, variables);
                     var functionName = GetFunctionName(call);
                     var funk = GetFunctioByName(functionName);
-                    if (funk != null && funk.IsReturnValue)
+                    if ((funk != null && funk.IsReturnValue || functionName == "RunSharp") && restur != null)
                     {
                         var repleseItem = item.Replace(call, restur.ToString());
                         lines[i] = repleseItem;
@@ -192,7 +189,7 @@ namespace MyParsr
                     {
                         id = conditionId.Value.Substring(3);
                     }
-                    var res = RunFor(id, variables, function);
+                    var res = RunFor(id, variables, distrib);
 
                     if (res != null)
                         return res;
@@ -215,7 +212,7 @@ namespace MyParsr
                 if (conditionMatch.Count > 0)
                 {
                     var id = conditionMatch[0].Value.Substring(9);
-                    var res = RunIfElse(id, variables, function);
+                    var res = RunIfElse(id, variables, distrib);
                     if (res != null)
                         return res;
                     continue;
@@ -225,7 +222,7 @@ namespace MyParsr
                 if (whileMatch.Count > 0)
                 {
                     var id = whileMatch[0].Value.Substring(5);
-                    var res = RunWhile(id, variables, function);
+                    var res = RunWhile(id, variables, distrib);
                     if (res != null)
                         return res;
                     continue;
@@ -234,12 +231,20 @@ namespace MyParsr
                 var returnMatch = returnRegex.Matches(item);
                 if (returnMatch.Count > 0)
                 {
+                    var function = distrib as Function;
+                    if (!function.IsReturnValue)
+                        continue;
+
                     var returnValue = returnMatch[0].Value;
                     var value = retutnValue.Matches(returnValue)[0].Value;
                     value = value.Substring(0, value.Length - 1);
-                    var res = DoExpresion(value, variables);
-                    if (res != null)
-                        return res;
+                    var variable = GetVariableWithValue(value, variables);
+                    var typeVariable = GetTypeVariable(variable);
+                    if (typeVariable != function.ReturnType)
+                        return null;
+                    var rValue = GetValueVariable(variable);
+                    if (rValue != null)
+                        return rValue;
                     continue;
                 }
             }
@@ -260,7 +265,21 @@ namespace MyParsr
                 Print(functionParams.FirstOrDefault());
             }
 
-            else if (IsExistFunction(functionName)|| function!=null)
+            if (functionName == "RunSharp")
+            {
+                var paramCall = string.Concat(call.Skip(call.IndexOf("(") + 1).Take(call.LastIndexOf(")") - call.IndexOf("(") - 1)).Split(',');
+                var listParam = new List<dynamic>();
+                for (int i = 0; i < paramCall.Length; i++)
+                {
+                    if (i > 3)
+                        listParam.Add(DoExpresion(paramCall[i], variables));
+                    else { paramCall[i] = DoExpresion(paramCall[i], variables).ToString(); }
+                }
+                var res = RunSharpCode(paramCall[0], paramCall[1], paramCall[2], paramCall[3], listParam.ToArray());
+                return res;
+            }
+
+            else if (IsExistFunction(functionName) || function != null)
             {
                 var res = CodeRun(function.Code, functionParams, function);
                 if (function.IsReturnValue)
@@ -384,12 +403,17 @@ namespace MyParsr
             var paramsVariable = new List<Variable>();
             var parametersMatchCollection = parametersRegex.Matches(callFunction);
             var functionParam = string.Empty;
+
             foreach (Match item in parametersMatchCollection)
             {
                 functionParam = item.Value;
             }
 
             var dict = new Dictionary<string, string>();
+
+            if (variables == null)
+                variables = new List<Variable>();
+
             var newV = DeepCopyList(variables);
 
             functionParam = functionParam.Substring(1, functionParam.Length - 2);
@@ -551,17 +575,19 @@ namespace MyParsr
             }
 
             var strWithoutDash = string.Concat(value.Where(c => c != '_'));
-            if (double.TryParse(strWithoutDash, out doubl))
-            {
-                variable = new VariableDouble() { Value = doubl };
-                return variable;
-            }
 
             if (int.TryParse(strWithoutDash, out int32))
             {
                 variable = new VariableInt() { Value = int32 };
                 return variable;
             }
+
+            if (double.TryParse(strWithoutDash, out doubl))
+            {
+                variable = new VariableDouble() { Value = doubl };
+                return variable;
+            }
+
 
             if (value.Contains("[") && value.Contains("]") && !IsOperation(value))
             {
@@ -702,9 +728,6 @@ namespace MyParsr
 
             var operands = code.Split(symbol, StringSplitOptions.RemoveEmptyEntries).ToList();
 
-            if (operands.Count == 1)
-                return DoOperation(GetVariable(operands[0]));
-
             var actionList = new List<string>();
             for (int i = 0; i < code.Length; i++)
             {
@@ -725,6 +748,11 @@ namespace MyParsr
                 if (variables.Any(v => v.Name == operands[i]))
                     operands[i] = DoOperation(variables.FirstOrDefault(v => v.Name == operands[i])).ToString();
             }
+
+
+            if (operands.Count == 1)
+                return DoOperation(GetVariable(operands[0]));
+
 
             var count = 0;
             dynamic res = null;
@@ -758,6 +786,52 @@ namespace MyParsr
             return res;
         }
 
+        private dynamic RunSharpCode(string path, string nameSpace, string className, string methodName, params dynamic[] param)
+        {
+            if (param == null)
+                param = new dynamic[0];
+
+            var code = string.Empty;
+            path = CutQuotes(path);
+            nameSpace = CutQuotes(nameSpace);
+            className = CutQuotes(className);
+            methodName = CutQuotes(methodName);
+            using (var reader = new StreamReader(path))
+            {
+                code = reader.ReadToEnd();
+            }
+            var result = CompileSharpCode(code, nameSpace, className, methodName, param);
+            return result;
+        }
+
+        private string CutQuotes(string str)
+        {
+            return str.Substring(1, str.Length - 2);
+        }
+
+        private dynamic CompileSharpCode(string code, string nameSpace, string className, string methodName, params dynamic[] param)
+        {
+            var providerOptions = new Dictionary<string, string> { { "CompilerVersion", "v3.5" } };
+
+            var provider = new CSharpCodeProvider(providerOptions);
+
+            var compilerParams = new CompilerParameters
+            {
+                GenerateInMemory = true,
+                GenerateExecutable = false
+            };
+
+            var results = provider.CompileAssemblyFromSource(compilerParams, code);
+
+            if (results.Errors.Count != 0)
+                throw new Exception("Mission failed!");
+
+            var obj = results.CompiledAssembly.CreateInstance(nameSpace + "." + className);
+            var mi = obj.GetType().GetMethod(methodName);
+            var res = mi.Invoke(obj, param);
+            return res;
+        }
+
         #endregion
 
         #region Private Methods for FormationCode 
@@ -781,10 +855,10 @@ namespace MyParsr
             return -1;
         }
 
-        private List<Function> GetFunctionList(string code)
+        private (string, List<Function>) GetFunctionList(string code)
         {
             var functionsList = new List<Function>();
-            var regex = new Regex(@"\s*function\s*\w*\(");
+            var regex = new Regex(@"\s*function\s*\w*\s*\w*\s*\(");
             while (regex.Matches(code).Count > 0)
             {
                 var function = new Function();
@@ -795,8 +869,14 @@ namespace MyParsr
                 code = code.Substring(0, code.IndexOf("function")) + code.Substring(index + 1, Math.Abs(index - code.Length) - 1);
                 function.Code = functionCode;
 
-                var matchName = functionNameRegex.Matches(functionCode);
+                var matchReturnType = functionReturnTypeRegex.Matches(functionCode);
                 var matchParam = parametersRegex.Matches(functionCode);
+
+                if (matchReturnType.Count > 0)
+                    function.ReturnType = GetReturnType(matchReturnType[0].Value);
+
+                var refexNameFunction = new Regex(string.Concat(@"(?<=\b", matchReturnType[0].Value, @"\s)(\w+)"));
+                var matchName = refexNameFunction.Matches(functionCode);
 
                 if (matchName.Count > 0)
                     function.Name = matchName[0].Value;
@@ -811,9 +891,9 @@ namespace MyParsr
                 function.IsReturnValue = matchReturn.Count > 0 ? true : false;
                 function = GetAttachments(function) as Function;
                 functionsList.Add(function);
-            }
 
-            return functionsList;
+            }
+            return (code, functionsList);
         }
 
         private (string, List<Condition>) GetIfElse(string code)
@@ -961,6 +1041,60 @@ namespace MyParsr
         private (string, List<Struct>) GetStructList(string code)
         {
             var structList = new List<Struct>();
+            var regex = new Regex(@"\s*struct\s*\w*\s*\(");
+
+            while (regex.Matches(code).Count > 0)
+            {
+                var struc = new Struct();
+                var index = GetIndex(code, code.IndexOf("struct"));
+                var structCode = code.Substring(code.IndexOf("struct"), code.Length - (Math.Abs(index - code.Length)) + 1 - code.IndexOf("struct"));
+                struc.Code = structCode;
+                var matchName = structNameRegex.Matches(structCode);
+                struc.Name = matchName[0].Value;
+                var resultFunction = GetFunctionList(structCode);
+                struc.Functions = resultFunction.Item2;
+                struc.Fields = GetStructFields(resultFunction.Item1);
+                code = code.Replace(structCode, "\r\n");
+                structList.Add(struc);
+            }
+            return (code, structList);
+        }
+
+        private Type GetReturnType(string code)
+        {
+            Type type = null;
+            if (code == "int")
+                type = typeof(VariableInt);
+            else if (code == "double")
+                type = typeof(VariableDouble);
+            else if (code == "bool")
+                type = typeof(VariableBoolean);
+            else if (code == "string")
+                type = typeof(VariableString);
+            else if (code == "array")
+                type = typeof(VariableArray);
+
+            return type;
+        }
+
+        private Type GetTypeVariable(Variable variable)
+        {
+            Type type = null;
+            if (variable is VariableInt)
+                type = typeof(VariableInt);
+            else if (variable is VariableDouble)
+                type = typeof(VariableDouble);
+            else if (variable is VariableString)
+                type = typeof(VariableString);
+            else if (variable is VariableArray)
+                type = typeof(VariableArray);
+
+            return type;
+        }
+
+        private (string, List<Struct>) GetInterfaceList(string code)
+        {
+            var structList = new List<Struct>();
             var regex = new Regex(@"\s*struct\s*\w*\s*{");
 
             while (regex.Matches(code).Count > 0)
@@ -971,7 +1105,7 @@ namespace MyParsr
                 struc.Code = structCode;
                 var matchName = structNameRegex.Matches(structCode);
                 struc.Name = matchName[0].Value;
-                struc.Functions = GetFunctionList(structCode);
+                // struc.Functions = GetFunctionList(structCode);
                 code = code.Replace(structCode, "\r\n");
                 structList.Add(struc);
             }
@@ -979,6 +1113,46 @@ namespace MyParsr
             return (code, structList);
         }
 
+        private List<Variable> GetStructFields(string code)
+        {
+            var regex = new Regex(@"(int|string|double|bool|array)\s*.*;");
+            var regex2 = new Regex(@"(int|string|double|bool|array)\s*\w*;");
+            var regex3 = new Regex(@"(int|string|double|bool|array)\s*\w*\s*=\s*\w*;");
+            var variables = new List<Variable>();
+            while (regex.Matches(code).Count > 0)
+            {
+                var field = regex.Matches(code)[0].Value;
+
+                var wordArr = regex.Matches(field)[0].Value.Split(' ').Where(w => !string.IsNullOrWhiteSpace(w) || w != "=").ToArray();
+                var type = GetReturnType(wordArr[0]);
+                var instanse = Activator.CreateInstance(type);
+                if (wordArr[1].Contains(";"))
+                    wordArr[1] = wordArr[1].Substring(0, wordArr[1].Length - 1);
+
+                if (regex2.Matches(field).Count > 0)
+                {
+                    var var = instanse as Variable;
+                    var.Name = wordArr[1];
+                    variables.Add(var);
+                }
+                else if (regex3.Matches(field).Count > 0)
+                {
+                    if (wordArr[3].Contains(";"))
+                        wordArr[3] = wordArr[3].Substring(0, wordArr[3].Length - 1);
+                    if (wordArr[3].StartsWith("="))
+                        wordArr[3] = wordArr[3].Substring(1, wordArr[3].Length - 1);
+                    var variable = GetVariableWithValue(wordArr[3], variables);
+                    variable.Name = wordArr[1];
+                    if (type == GetTypeVariable(variable))
+                        variables.Add(variable);
+                }
+                code = code.Replace(field, "\r\n");
+            }
+            return variables;
+        }
+
         #endregion
+
     }
 }
+

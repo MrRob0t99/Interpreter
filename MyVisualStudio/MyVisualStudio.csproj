@@ -82,7 +82,9 @@
     <Compile Include="Model\Parser\Else.cs" />
     <Compile Include="Model\Parser\For.cs" />
     <Compile Include="Model\Parser\Function.cs" />
+    <Compile Include="Model\Parser\Interface.cs" />
     <Compile Include="Model\Parser\Interpreter.cs" />
+    <Compile Include="Model\Parser\InterpreterInit.cs" />
     <Compile Include="Model\Parser\Struct.cs" />
     <Compile Include="Model\Parser\Variables\Variable.cs" />
     <Compile Include="Model\Parser\Variables\VariableArray.cs" />

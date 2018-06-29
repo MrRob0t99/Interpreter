@@ -1,4 +1,4 @@
-﻿using MyParsr;
+﻿using System;
 
 namespace MyVisualStudio.Model.Parser
 {
@@ -8,8 +8,8 @@ namespace MyVisualStudio.Model.Parser
 
         public bool IsReturnValue { get; set; }
 
-        public bool Value { get; set; }
-
         public string Parameters { get; set; }
+
+        public Type ReturnType { get; set; }
     }
 }

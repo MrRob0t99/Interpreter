@@ -27,6 +27,7 @@ namespace MyVisualStudio.Presenter
         private readonly Style _functionStyle;
         private readonly Style _stringStyle;
         private readonly Style _consoleStyle;
+        private string _path;
 
 
         public MainPresenter(IMainView mainView)
@@ -59,6 +60,7 @@ namespace MyVisualStudio.Presenter
         {
             string code = string.Empty;
             var path = string.Concat(_mainView.TabControl.SelectedTab.Name, ".txt");
+            _path = path;
             var rtb = _mainView.TabControl
                   .SelectedTab.Controls
                   .Cast<Control>()
@@ -200,18 +202,11 @@ namespace MyVisualStudio.Presenter
             var handle = GetConsoleWindow();
             try
             {
-                var code = string.Empty;
                 ShowWindow(handle, _consoleShow);
                 SaveProject(sender, e);
-                var rtb = _mainView.TabControl
-                .SelectedTab.Controls
-                .Cast<Control>()
-                .FirstOrDefault(x => x is FastColoredTextBox);
-
-                if (rtb != null)
-                    code = rtb.Text;
                 Interpreter interpreter = new Interpreter();
-                interpreter.Run(code);
+                interpreter.LoadFile(_path);
+                interpreter.RunMain();
             }
 
             catch (Exception ex)

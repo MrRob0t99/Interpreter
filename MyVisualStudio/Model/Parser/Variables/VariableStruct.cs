@@ -1,8 +1,10 @@
-﻿namespace MyVisualStudio.Model.Parser.Variables
+﻿using System.Collections.Generic;
+
+namespace MyVisualStudio.Model.Parser.Variables
 {
     class VariableStruct : Variable
     {
-        public dynamic Value { get; set; }
+        public List<Variable> Value { get; set; }
 
         public string StructName { get; set; }
     }
