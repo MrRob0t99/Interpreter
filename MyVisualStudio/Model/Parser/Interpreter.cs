@@ -114,8 +114,9 @@ namespace MyParsr
                     int index = struc.Value.IndexOf(oldVariable);
                     if (index != -1)
                         struc.Value[index] = newFieldVariable;
-                }
 
+                    continue;
+                }
 
                 var callStructFunctionMatch = callStructFunctionRegex.Matches(item);
                 if (callStructFunctionMatch.Count > 0)
@@ -151,6 +152,33 @@ namespace MyParsr
                     continue;
                 }
 
+                var re = new Regex(@"\s*\w*\.\w*");
+                var getStructFieldValue = re.Matches(item);
+                if(getStructFieldValue.Count>0)
+                {
+                    var regex = new Regex(@"\.\w*");
+                    var getStructField = getStructFieldValue[0].Value;
+                    var nameVariable = string.Concat(getStructField.Take(getStructField.IndexOf(".")));
+                    if (!variables.Any(v => v.Name == nameVariable))
+                        continue;
+
+                    var variable = variables.FirstOrDefault(v => v.Name == nameVariable);
+                    if (!(variable is VariableStruct))
+                        continue;
+
+                    var nameFiled = regex.Matches(getStructField)[0].Value.Substring(1);
+                    var struc = variable as VariableStruct;
+                    if (!struc.Value.Any(s => s.Name == nameFiled))
+                        continue;
+
+                    var oldVariable = struc.Value.FirstOrDefault(s => s.Name == nameFiled);
+                    var res = GetValueVariable(oldVariable);
+                    var repleseItem = item.Replace(getStructField, res.ToString());
+                    lines[i] = repleseItem;
+                    --i;
+                    continue;
+                }
+
                 var callMatch = callFunctionRegex.Matches(item);
                 if (callMatch.Count > 0 && !item.Contains("function"))
                 {
@@ -167,7 +195,7 @@ namespace MyParsr
                     }
                     continue;
                 }
-
+                
                 var arrElemUpdate = updateItemArrRegex.Matches(item);
                 if (arrElemUpdate.Count > 0)
                 {
