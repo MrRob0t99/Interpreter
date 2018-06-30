@@ -17,6 +17,9 @@ namespace MyParsr
 
         public string Code;
 
+
+        public event Action<string> PrintEvent;
+
         public dynamic Run(string code)
         {
             var res = GetStructList(code);
@@ -24,6 +27,8 @@ namespace MyParsr
             structList = res.Item2;
             functionList = GetFunctionList(code).Item2;
             var mainFunction = functionList.FirstOrDefault(f => f.Name == "Main");
+            if (mainFunction == null)
+                return mainFunction;
             var result = CodeRun(mainFunction.Code, null, mainFunction);
             Console.WriteLine("END");
             return result;
@@ -443,7 +448,9 @@ namespace MyParsr
 
         private void Print(Variable variable)
         {
-            Console.WriteLine(DoOperation(variable).ToString());
+            var strOut = (DoOperation(variable)).ToString();
+            PrintEvent(strOut.ToString());
+            //Console.WriteLine(strOut);
         }
 
         private List<Variable> GetParametersForCallFunction(string callFunction, List<Variable> variables, Function function)

@@ -202,11 +202,21 @@ namespace MyVisualStudio.Presenter
             var handle = GetConsoleWindow();
             try
             {
+                Control richTextBox = null;
+                if (_mainView.TabControl.TabCount > 0)
+                    
+                 richTextBox = _mainView.TabControl
+                    .SelectedTab.Controls
+                    .Cast<Control>()
+                    .FirstOrDefault(x => x is FastColoredTextBox);
+
+                var code = richTextBox.Text;
                 ShowWindow(handle, _consoleShow);
                 SaveProject(sender, e);
                 Interpreter interpreter = new Interpreter();
-                interpreter.LoadFile(_path);
-                interpreter.RunFile();
+                interpreter.PrintEvent += Show;
+                interpreter.Run(code);
+               ///interpreter.RunFile();
             }
 
             catch (Exception ex)
@@ -220,6 +230,10 @@ namespace MyVisualStudio.Presenter
                 ShowWindow(handle, _consoleHide);
                 Console.Clear();
             }
+        }
+        public void Show(string str)
+        {
+            Console.WriteLine(str);
         }
 
 
