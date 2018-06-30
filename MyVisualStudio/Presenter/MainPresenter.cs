@@ -206,7 +206,7 @@ namespace MyVisualStudio.Presenter
                 SaveProject(sender, e);
                 Interpreter interpreter = new Interpreter();
                 interpreter.LoadFile(_path);
-                interpreter.RunMain();
+                interpreter.RunFile();
             }
 
             catch (Exception ex)

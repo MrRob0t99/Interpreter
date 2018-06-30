@@ -19,6 +19,10 @@ namespace MyParsr
 
         public dynamic Run(string code)
         {
+            var res = GetStructList(code);
+            code = res.Item1;
+            structList = res.Item2;
+            functionList = GetFunctionList(code).Item2;
             var mainFunction = functionList.FirstOrDefault(f => f.Name == "Main");
             var result = CodeRun(mainFunction.Code, null, mainFunction);
             Console.WriteLine("END");
@@ -31,15 +35,10 @@ namespace MyParsr
             {
                 Code = streamReader.ReadToEnd();
             }
-            Code = Code.Replace("  ", " ");
-            var res = GetStructList(Code);
-            Code = res.Item1;
-            structList = res.Item2;
-            functionList = GetFunctionList(Code).Item2;
             return Code;
         }
 
-        public dynamic RunMain()
+        public dynamic RunFile()
         {
             return Run(Code);
         }
