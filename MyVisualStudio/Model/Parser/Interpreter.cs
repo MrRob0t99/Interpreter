@@ -74,7 +74,7 @@ namespace MyParsr
         #region Private Methods for RunCode
 
         //This method will be divided into parts
-        private dynamic CodeRun(string code, List<Variable> variables, Base distrib = null)
+        private dynamic CodeRun(string code, List<Variable> variables, Base bas = null)
         {
             if (variables == null)
                 variables = new List<Variable>();
@@ -85,36 +85,12 @@ namespace MyParsr
                 var item = lines[i];
                 if (string.IsNullOrWhiteSpace(item))
                     continue;
+
                 var setFieldStructMatch = setStructFieldRegex.Matches(item);
                 if (setFieldStructMatch.Count > 0)
                 {
-                    var regex = new Regex(@"\.\w*");
                     var setFieldStruct = setFieldStructMatch[0].Value.Trim();
-                    var nameVariable = string.Concat(setFieldStruct.Take(setFieldStruct.IndexOf(".")));
-                    if (!variables.Any(v => v.Name == nameVariable))
-                        continue;
-
-                    var variable = variables.FirstOrDefault(v => v.Name == nameVariable);
-                    if (!(variable is VariableStruct))
-                        continue;
-
-                    var nameFiled = regex.Matches(setFieldStruct)[0].Value.Substring(1);
-                    var struc = variable as VariableStruct;
-                    if (!struc.Value.Any(s => s.Name == nameFiled))
-                        continue;
-
-                    var fieldValue = variableValueRegex.Matches(setFieldStruct)[0].Value;
-                    fieldValue = fieldValue.Substring(1, fieldValue.Length - 2).Trim();
-                    var newFieldVariable = GetVariableWithValue(fieldValue, variables);
-                    var oldVariable = struc.Value.FirstOrDefault(s => s.Name == nameFiled);
-                    if (GetTypeVariable(oldVariable) != GetTypeVariable(newFieldVariable))
-                        continue;
-
-                    newFieldVariable.Name = oldVariable.Name;
-                    int index = struc.Value.IndexOf(oldVariable);
-                    if (index != -1)
-                        struc.Value[index] = newFieldVariable;
-
+                    SetFieldStruct(setFieldStruct, variables);
                     continue;
                 }
 
@@ -122,57 +98,30 @@ namespace MyParsr
                 if (callStructFunctionMatch.Count > 0)
                 {
                     var callFunction = callStructFunctionMatch[0].Value.Trim();
-                    var nameVariable = string.Concat(callFunction.Take(callFunction.IndexOf(".")));
-                    if (!variables.Any(v => v.Name == nameVariable))
-                        continue;
-                    var variable = (variables.FirstOrDefault(v => v.Name == nameVariable)) as VariableStruct;
-                    var methodName = string.Concat(callFunction.Skip(callFunction.IndexOf(".") + 1).Take(callFunction.LastIndexOf("(") - callFunction.IndexOf(".") - 1));
-                    var methodCall = string.Concat(callFunction.Skip(callFunction.IndexOf(".") + 1).Take(callFunction.LastIndexOf(")") - callFunction.IndexOf(".")));
-                    var struc = structList.FirstOrDefault(s => s.Name == variable.StructName);
-                    if (!struc.Functions.Any(f => f.Name == methodName))
-                        continue;
-                    var funk = struc.Functions.FirstOrDefault(f => f.Name == methodName);
-                    var result = RunFunk(methodCall, variables, funk);
+                    var result = CallStructFunction(callFunction, variables);
+                    if (result != null)
+                    {
+                        var repleseItem = item.Replace(callFunction, result.ToString() + ";");
+                        lines[i] = repleseItem;
+                        --i;
+                    }
+                    continue;
                 }
 
                 var createInstanseStructMatch = createInstanseStructRegex.Matches(item);
                 if (createInstanseStructMatch.Count > 0)
                 {
                     var createInstanseStruct = createInstanseStructMatch[0].Value;
-                    var nameStruct = createStructNameRegex.Matches(createInstanseStruct)[0].Value;
-                    if (!structList.Any(s => s.Name == nameStruct))
-                        continue;
-                    var struc = structList.FirstOrDefault(s => s.Name == nameStruct);
-                    var structVariable = new VariableStruct();
-                    var variableNameMatch = variableNameRegex.Matches(code);
-                    structVariable.Name = string.Concat(variableNameMatch[0].Value.Substring(0, variableNameMatch[0].Value.Length - 1).Where(c => c != ' '));
-                    structVariable.StructName = nameStruct;
-                    structVariable.Value = struc.Fields;
-                    variables.Add(structVariable);
+                    CreateInstanceStruct(createInstanseStruct, variables);
                     continue;
                 }
 
                 var re = new Regex(@"\s*\w*\.\w*");
                 var getStructFieldValue = re.Matches(item);
-                if(getStructFieldValue.Count>0)
+                if (getStructFieldValue.Count > 0)
                 {
-                    var regex = new Regex(@"\.\w*");
                     var getStructField = getStructFieldValue[0].Value;
-                    var nameVariable = string.Concat(getStructField.Take(getStructField.IndexOf(".")));
-                    if (!variables.Any(v => v.Name == nameVariable))
-                        continue;
-
-                    var variable = variables.FirstOrDefault(v => v.Name == nameVariable);
-                    if (!(variable is VariableStruct))
-                        continue;
-
-                    var nameFiled = regex.Matches(getStructField)[0].Value.Substring(1);
-                    var struc = variable as VariableStruct;
-                    if (!struc.Value.Any(s => s.Name == nameFiled))
-                        continue;
-
-                    var oldVariable = struc.Value.FirstOrDefault(s => s.Name == nameFiled);
-                    var res = GetValueVariable(oldVariable);
+                    var res = GetStructFieldValue(getStructField, variables);
                     var repleseItem = item.Replace(getStructField, res.ToString());
                     lines[i] = repleseItem;
                     --i;
@@ -195,7 +144,7 @@ namespace MyParsr
                     }
                     continue;
                 }
-                
+
                 var arrElemUpdate = updateItemArrRegex.Matches(item);
                 if (arrElemUpdate.Count > 0)
                 {
@@ -212,13 +161,8 @@ namespace MyParsr
                 var forMatch = forCallRegex.Matches(item);
                 if (forMatch.Count > 0)
                 {
-                    string id = string.Empty;
-                    foreach (Match conditionId in forMatch)
-                    {
-                        id = conditionId.Value.Substring(3);
-                    }
-                    var res = RunFor(id, variables, distrib);
-
+                    var id = forMatch[0].Value.Substring(3);
+                    var res = RunFor(id, variables, bas);
                     if (res != null)
                         return res;
                     continue;
@@ -240,7 +184,7 @@ namespace MyParsr
                 if (conditionMatch.Count > 0)
                 {
                     var id = conditionMatch[0].Value.Substring(9);
-                    var res = RunIfElse(id, variables, distrib);
+                    var res = RunIfElse(id, variables, bas);
                     if (res != null)
                         return res;
                     continue;
@@ -250,7 +194,7 @@ namespace MyParsr
                 if (whileMatch.Count > 0)
                 {
                     var id = whileMatch[0].Value.Substring(5);
-                    var res = RunWhile(id, variables, distrib);
+                    var res = RunWhile(id, variables, bas);
                     if (res != null)
                         return res;
                     continue;
@@ -259,10 +203,9 @@ namespace MyParsr
                 var returnMatch = returnRegex.Matches(item);
                 if (returnMatch.Count > 0)
                 {
-                    var function = distrib as Function;
+                    var function = bas as Function;
                     if (!function.IsReturnValue)
                         continue;
-
                     var returnValue = returnMatch[0].Value;
                     var value = retutnValue.Matches(returnValue)[0].Value;
                     value = value.Substring(0, value.Length - 1);
@@ -278,6 +221,85 @@ namespace MyParsr
             }
 
             return null;
+        }
+
+        private dynamic CallStructFunction(string code, List<Variable> variables)
+        {
+            var nameVariable = string.Concat(code.Take(code.IndexOf(".")));
+            if (!variables.Any(v => v.Name == nameVariable))
+                return null;
+            var variable = (variables.FirstOrDefault(v => v.Name == nameVariable)) as VariableStruct;
+            var methodName = string.Concat(code.Skip(code.IndexOf(".") + 1).Take(code.LastIndexOf("(") - code.IndexOf(".") - 1));
+            var methodCall = string.Concat(code.Skip(code.IndexOf(".") + 1).Take(code.LastIndexOf(")") - code.IndexOf(".")));
+            var struc = structList.FirstOrDefault(s => s.Name == variable.StructName);
+            if (!struc.Functions.Any(f => f.Name == methodName))
+                return null;
+            var funk = struc.Functions.FirstOrDefault(f => f.Name == methodName);
+            var result = RunFunk(methodCall, variables, funk);
+            return result;
+        }
+
+        private dynamic GetStructFieldValue(string code, List<Variable> variables)
+        {
+            var regex = new Regex(@"\.\w*");
+
+            var nameVariable = string.Concat(code.Take(code.IndexOf(".")));
+            if (!variables.Any(v => v.Name == nameVariable))
+                return null;
+            var variable = variables.FirstOrDefault(v => v.Name == nameVariable);
+            if (!(variable is VariableStruct))
+                return null;
+            var nameFiled = regex.Matches(code)[0].Value.Substring(1);
+            var struc = variable as VariableStruct;
+            if (!struc.Value.Any(s => s.Name == nameFiled))
+                return null;
+
+            var oldVariable = struc.Value.FirstOrDefault(s => s.Name == nameFiled);
+            var res = GetValueVariable(oldVariable);
+            return res;
+        }
+
+        private void CreateInstanceStruct(string code, List<Variable> variables)
+        {
+            var nameStruct = createStructNameRegex.Matches(code)[0].Value;
+            if (!structList.Any(s => s.Name == nameStruct))
+                return;
+            var struc = structList.FirstOrDefault(s => s.Name == nameStruct);
+            var structVariable = new VariableStruct();
+            var variableNameMatch = variableNameRegex.Matches(code);
+            structVariable.Name = string.Concat(variableNameMatch[0].Value.Substring(0, variableNameMatch[0].Value.Length - 1).Where(c => c != ' '));
+            structVariable.StructName = nameStruct;
+            structVariable.Value = struc.Fields;
+            variables.Add(structVariable);
+        }
+
+        private void SetFieldStruct(string code, List<Variable> variables)
+        {
+            var regex = new Regex(@"\.\w*");
+
+            var nameVariable = string.Concat(code.Take(code.IndexOf(".")));
+            if (!variables.Any(v => v.Name == nameVariable))
+                return;
+            var variable = variables.FirstOrDefault(v => v.Name == nameVariable);
+            if (!(variable is VariableStruct))
+                return;
+
+            var nameFiled = regex.Matches(code)[0].Value.Substring(1);
+            var struc = variable as VariableStruct;
+            if (!struc.Value.Any(s => s.Name == nameFiled))
+                return;
+
+            var fieldValue = variableValueRegex.Matches(code)[0].Value;
+            fieldValue = fieldValue.Substring(1, fieldValue.Length - 2).Trim();
+            var newFieldVariable = GetVariableWithValue(fieldValue, variables);
+            var oldVariable = struc.Value.FirstOrDefault(s => s.Name == nameFiled);
+            if (GetTypeVariable(oldVariable) != GetTypeVariable(newFieldVariable))
+                return;
+
+            newFieldVariable.Name = oldVariable.Name;
+            int index = struc.Value.IndexOf(oldVariable);
+            if (index != -1)
+                struc.Value[index] = newFieldVariable;
         }
 
         private dynamic RunFunk(string call, List<Variable> variables, Function function = null)
