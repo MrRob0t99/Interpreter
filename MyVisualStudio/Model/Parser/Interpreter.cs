@@ -291,6 +291,12 @@ namespace MyParsr
             var arrParam = code.Split(',');
             var function = constructors.FirstOrDefault(f => f.Parameters.Split(',').Count() == arrParam.Count());
             var param = GetParametersForCallFunction(code, variables, function);
+            for (int i = 0; i < param.Count; i++)
+            {
+                param[i].Name = param[i].Name.Trim().Split(' ')[1];
+            }
+            variables.AddRange(param);
+            CodeRun(function.Code, variables, function);
         }
 
         private void SetFieldStruct(string code, List<Variable> variables)
