@@ -11,5 +11,7 @@ namespace MyVisualStudio.Model.Parser
         public string Parameters { get; set; }
 
         public Type ReturnType { get; set; }
+
+        public bool IsConstructor { get; set; }
     }
 }

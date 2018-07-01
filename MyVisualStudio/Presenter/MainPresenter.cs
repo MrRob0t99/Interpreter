@@ -216,7 +216,6 @@ namespace MyVisualStudio.Presenter
                 Interpreter interpreter = new Interpreter();
                 interpreter.PrintEvent += Show;
                 interpreter.Run(code);
-               ///interpreter.RunFile();
             }
 
             catch (Exception ex)

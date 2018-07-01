@@ -17,7 +17,6 @@ namespace MyParsr
 
         public string Code;
 
-
         public event Action<string> PrintEvent;
 
         public dynamic Run(string code)
@@ -140,7 +139,12 @@ namespace MyParsr
                     var restur = RunFunk(call, variables);
                     var functionName = GetFunctionName(call);
                     var funk = GetFunctioByName(functionName);
-                    if ((funk != null && funk.IsReturnValue || functionName == "RunSharp") && restur != null)
+                    if (restur == null && funk != null && funk.IsReturnValue)
+                    {
+                        PrintEvent("Return type is not valid");
+                        break;
+                    }
+                    else if ((funk != null && funk.IsReturnValue || functionName == "RunSharp") && restur != null)
                     {
                         var repleseItem = item.Replace(call, restur.ToString());
                         lines[i] = repleseItem;
@@ -274,7 +278,19 @@ namespace MyParsr
             structVariable.Name = string.Concat(variableNameMatch[0].Value.Substring(0, variableNameMatch[0].Value.Length - 1).Where(c => c != ' '));
             structVariable.StructName = nameStruct;
             structVariable.Value = struc.Fields;
+            var callRegex = new Regex(@"(?<=\bnew\s)(.*);");
+            var call = callRegex.Matches(code)[0].Value;
+            code = string.Concat(code.Skip(code.IndexOf("(") + 1).Take(code.LastIndexOf(")") - code.IndexOf("(") - 1));
+            if (!string.IsNullOrWhiteSpace(code))
+                RunStructConstructor(call, struc.Functions.Where(f => f.IsConstructor).ToList(), structVariable.Value);
             variables.Add(structVariable);
+        }
+
+        private void RunStructConstructor(string code, List<Function> constructors, List<Variable> variables)
+        {
+            var arrParam = code.Split(',');
+            var function = constructors.FirstOrDefault(f => f.Parameters.Split(',').Count() == arrParam.Count());
+            var param = GetParametersForCallFunction(code, variables, function);
         }
 
         private void SetFieldStruct(string code, List<Variable> variables)
@@ -450,7 +466,6 @@ namespace MyParsr
         {
             var strOut = (DoOperation(variable)).ToString();
             PrintEvent(strOut.ToString());
-            //Console.WriteLine(strOut);
         }
 
         private List<Variable> GetParametersForCallFunction(string callFunction, List<Variable> variables, Function function)
@@ -936,7 +951,12 @@ namespace MyParsr
 
                 if (matchName.Count > 0)
                     function.Name = matchName[0].Value;
+                else
+                {
+                    var regexConstructor = new Regex(@"(?<=\bfunction\s)(\w+)");
+                    function.Name = regexConstructor.Matches(functionCode)[0].Value;
 
+                }
                 if (matchParam.Count > 0)
                     param = matchParam[0].Value;
 
@@ -1111,6 +1131,11 @@ namespace MyParsr
                 struc.Functions = resultFunction.Item2;
                 struc.Fields = GetStructFields(resultFunction.Item1);
                 code = code.Replace(structCode, "\r\n");
+                for (int i = 0; i < struc.Functions.Count; i++)
+                {
+                    if (struc.Functions[i].Name == struc.Name)
+                        struc.Functions[i].IsConstructor = true;
+                }
                 structList.Add(struc);
             }
             return (code, structList);
@@ -1147,6 +1172,22 @@ namespace MyParsr
 
             return type;
         }
+
+
+        private Variable SetDefaultValue(Variable variable)
+        {
+            if (variable is VariableInt)
+                (variable as VariableInt).Value = 0;
+            else if (variable is VariableDouble)
+                (variable as VariableDouble).Value = 0;
+            else if (variable is VariableString)
+                (variable as VariableString).Value = string.Empty;
+            else if (variable is VariableArray)
+                (variable as VariableArray).Value = new List<Variable>();
+
+            return variable;
+        }
+
 
         private (string, List<Struct>) GetInterfaceList(string code)
         {
@@ -1187,7 +1228,8 @@ namespace MyParsr
 
                 if (regex2.Matches(field).Count > 0)
                 {
-                    var var = instanse as Variable;
+
+                    var var = SetDefaultValue(instanse as Variable);
                     var.Name = wordArr[1];
                     variables.Add(var);
                 }
